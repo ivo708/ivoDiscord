@@ -1,0 +1,123 @@
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        "ivodiscord" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+configurations {
+    shadowImplementation {
+        canBeResolved = true
+        extendsFrom implementation
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    
+    // Se incluye Kotlin 1.9.0 en el jar final para aislarlo
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
+
+    // Fabric API y demás dependencias
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    compileOnly 'net.luckperms:api:5.4'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    implementation 'net.dv8tion:JDA:5.0.0'
+    implementation 'net.sf.trove4j:trove4j:3.0.3'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.0'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.15.0'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    implementation 'com.squareup.okio:okio:3.0.0'
+    implementation 'mysql:mysql-connector-java:8.0.28'
+
+    shadowImplementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    shadowImplementation 'com.squareup.okio:okio:3.0.0'
+    shadowImplementation 'org.apache.commons:commons-collections4:4.4'
+    shadowImplementation("net.dv8tion:JDA:5.0.0") {
+        exclude module: "opus-java"
+    }
+	shadowImplementation 'net.luckperms:api:5.4'
+    shadowImplementation 'net.sf.trove4j:trove4j:3.0.3'
+    shadowImplementation 'com.neovisionaries:nv-websocket-client:2.14'
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": inputs.properties.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    inputs.property "archivesName", project.base.archivesName
+
+    from("LICENSE") {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    destinationDirectory.set(layout.buildDirectory.dir("shadow-libs"))
+    configurations = [project.configurations.shadowImplementation]
+    
+    // Se incluye el código del sourceSet client
+    from sourceSets.client.output
+
+    // Se reubica el paquete de Kotlin para aislar la versión 1.9.0 y evitar conflictos
+    relocate 'kotlin', 'com.tumod.shadow.kotlin'
+}
+
+remapJar {
+    dependsOn shadowJar
+    inputFile.set(file("${buildDir}/shadow-libs/ivodiscord-${project.mod_version}.jar"))
+}
+
+publishing {
+    publications {
+        create("mavenJava", MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
+
+    repositories {
+        // Agrega aquí tu repositorio de publicación si lo necesitas.
+    }
+}
